@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Token names defined here; sites override values in their own
+ * assets/css/main.css. This is the contract between blog-base and
+ * sites — change a name here, all sites need to update.
+ */
+:root {
+  --color-bg:      #FFFFFF;
+  --color-paper:   #FAFAFA;
+  --color-ink:     #111111;
+  --color-muted:   #666666;
+  --color-line:    #DDDDDD;
+  --color-tag:     #EEEEEE;
+  --color-accent:  #444444;
+  --color-accent2: #888888;
+
+  --font-display: ui-serif, Georgia, serif;
+  --font-body:    ui-sans-serif, system-ui, sans-serif;
+  --font-mono:    ui-monospace, SF Mono, Menlo, monospace;
+}
+
+html, body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+}
