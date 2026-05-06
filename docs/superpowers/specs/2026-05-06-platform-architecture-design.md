@@ -430,3 +430,84 @@ init spec §10 を継承 + 追加:
 ---
 
 **次のステップ**: ユーザレビュー → 承認後 commit → writing-plans skill で M1（プラットフォーム雛形）または M2（base 抽出）の実装プランを作成。
+
+## 11. 執行デルタ（M1+M2 完了 / 2026-05-07 追記）
+
+実装プラン（`docs/superpowers/plans/2026-05-06-platform-monorepo-and-base-extraction.md`）の実行中、§2-§3 と §10 のいくつかの想定が崩れた。以降の M3 / 新サイト立ち上げで同じ罠を避けるため記録。
+
+### A. cross-layer named import が `content.config.ts` で解決されない（§7-B (a) の前提が一部失効）
+
+**症状**: `import { baseSchema } from '@blog-platform/blog-base/content/schema'`、相対パス `../blog-hub/...`、`#blog-base/*` Nuxt alias、いずれも `content.config.ts` 内では解決されず、Nuxt build / dev の両方で失敗。
+
+**原因**: `content.config.ts` は c12 によって Nuxt 本体（Vite / alias / module resolution）が立ち上がる**前**に読まれる。layer の package.json が pnpm workspace でリンクされていても、giget cache に展開されていても、この時点では module resolver から見えない。
+
+**採用した解**: schema kernel を **PetGurashi の `content.config.ts` に意図的に重複定義**（`// keep in sync with blog-base/content/schema.ts` コメント付き）。base 側にも canonical `baseSchema` は存在し続ける（将来 PoC で別ルートが見つかった時の参照用 + ドキュメント上の SoT として）。
+
+**スペックへの含意**:
+- §7-B (a)「zod をソースオブトゥルース」は **content.config.ts では成立しない**。kernel が稀にしか変わらないので**意識的な二重化**で回す
+- 新サイト立ち上げ時、`blog-site-template` の `content.config.ts` には kernel をインライン展開した形を入れる必要がある（`blog-base` から import する形にできない）
+- §2.2 の export 形式 `export { baseSchema }` 自体は維持（base 内部の他ファイル / 将来の hub から使われる可能性）
+
+### B. cross-layer import が `tailwind.config.ts` でも解決されない
+
+**症状**: PetGurashi の `tailwind.config.ts` から `import basePreset from '../blog-hub/packages/blog-base/tailwind/preset'` がビルド時に失敗。Tailwind module の初期化は Nuxt alias 設定よりさらに早い。
+
+**採用した解**: blog-base の `nuxt.config.ts` 側で `@nuxtjs/tailwindcss` の `config:` オプションを使い、preset 内容（colors / fontFamily / 自身の content paths）を**module 設定として配る**。consumer の `tailwind.config.ts` は自分のプロジェクト固有 content paths のみ持つ。
+
+```ts
+// blog-base/nuxt.config.ts (抜粋)
+tailwindcss: {
+  config: {
+    content: [
+      resolve(layerDir, 'components/**/*.{vue,ts}'),
+      resolve(layerDir, 'layouts/**/*.vue'),
+      resolve(layerDir, 'pages/**/*.vue'),
+    ],
+    theme: { extend: { colors: { /* CSS変数参照 */ }, fontFamily: { /* 同 */ } } },
+  },
+},
+```
+
+**スペックへの含意**: §2.1 の「base に `tailwind/preset.ts` を export して consumer が `presets: [basePreset]` で読み込む」モデルは廃止。`tailwind/preset.ts` ファイル自体は残してもいいが**呼ばれない**。配布経路は nuxt.config 経由に一本化。
+
+### C. layer の `nuxt.config.ts` は `~/` alias を使えない
+
+**症状**: layer 内で `components: [{ path: '~/components' }]` や `css: ['~/assets/css/base.css']` と書くと、consumer の CWD にリベースされて layer 自身のファイルが見つからない。
+
+**採用した解**: `import.meta.url` から layer ディレクトリを解決し、すべて絶対パスで指定。
+
+```ts
+import { fileURLToPath } from 'node:url'
+import { dirname, resolve } from 'node:path'
+const layerDir = dirname(fileURLToPath(import.meta.url))
+
+components: [{ path: resolve(layerDir, 'components'), pathPrefix: false }],
+css: [resolve(layerDir, 'assets/css/base.css')],
+```
+
+### D. `useSiteConfig` を `useBlogSite` に rename
+
+**症状**: 別の auto-import（おそらく Nuxt の組み込み or `@nuxtjs/sitemap` 等が公開する）と名前衝突。
+
+**採用した解**: `useBlogSite()` に rename。types/app-config.d.ts の interface 名 `SiteConfig` は据え置き（型名は衝突しない）。
+
+### E. AppConfig 型拡張は Layer 跨ぎでも効いた
+
+§10 リスク表「AppConfig 型拡張が Layer 跨ぎで効かない」は**杞憂**。`packages/blog-base/types/app-config.d.ts` の `declare module '@nuxt/schema'` が consumer 側に届き、`useAppConfig().site` が型推論される。fallback の `as` キャストは不要だった。
+
+### F. layer の cross-package named import は composable / component / page には効く
+
+A・B が失敗したのは「c12 や Tailwind init が早すぎる」ファイル限定。**Nuxt が起動した後に評価される** composable / component / page / layout / `useAppConfig` 系では layer auto-import が正常に機能した。content.config / tailwind.config だけが特殊と理解する。
+
+### G. PetGurashi `nuxt.config.ts` で modules / components 宣言を残した
+
+layer が同じ `modules` / `components` を提供しているので consumer 側で書かなくても動くはずだが、**実装では consumer 側にも残した**。consumer 単体で読んだとき自己完結している方が混乱が少ない。Nuxt は同名指定をマージするため重複の害はない。
+
+### H. PetGurashi `nuxt.config.ts` の `nitro.prerender.routes` を拡充
+
+base に静的ルートを書けないので、PetGurashi 側で `'/about', '/privacy', '/disclaimer', '/dog/daily', '/cat/daily'` 等を明示。新サイト立ち上げ時のチェックリストに「prerender routes を追加する」を含める必要がある（§3.4 テンプレ README 候補）。
+
+---
+
+これらのデルタは **§7-B / §10 / §3.2-3.3 を上書き**する。コードの実状はこの §11 が最新。
+
