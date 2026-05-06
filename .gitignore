@@ -24,3 +24,12 @@ build/
 # Local data
 .data/
 *.local
+
+# Monorepo
+**/node_modules/
+**/.nuxt/
+**/.output/
+**/dist/
+
+# pnpm
+.pnpm-store/
