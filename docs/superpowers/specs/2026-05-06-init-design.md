@@ -1,8 +1,18 @@
 # blog-hub — Init Design Spec
 
 - **作成日**: 2026-05-06
-- **ステータス**: Init（編集レイヤーPoC前）
+- **ステータス**: ⚠️ **Superseded by [`2026-05-06-platform-architecture-design.md`](./2026-05-06-platform-architecture-design.md)**（同日中に refine された）
 - **経緯**: PetGurashi セッション中に「複数ブログを統括する管理ハブが必要」と判明し、別PJとして派生
+
+> **読み手への注意**: 本 spec は方向性合意の最初のスナップショット。
+> その後 platform-architecture-design.md で次の点が確定/変更されている:
+> - 対象サイトを **PetGurashi 単独** に縮小（LicenseHub 除外）
+> - 編集レイヤーは引き続き既製 CMS、ただし **プラットフォーム自体は monorepo（blog-base Layer + hub）**
+> - CMS 選定は **M5 で PoC**（本 spec §7-A の評価軸は platform spec §10-A に転記済み）
+> - スキーマ二重化は **(a) zod ソースオブトゥルース** に確定
+> - 認証は **Cloudflare Access + GitHub OAuth**、データは **D1 + KV**
+>
+> 以下の本文は記録として残す。実装方針は platform spec を参照すること。
 
 ## 1. 背景と目的
 
