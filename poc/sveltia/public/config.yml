@@ -1,0 +1,65 @@
+# Sveltia CMS PoC config — edits PetGurashi's content/ via local proxy.
+# The decap-server (proxy) must run from /Users/yusaku/projects/PetGurashi
+# so all `folder:` and `media_folder:` paths are relative to that root.
+
+backend:
+  name: github
+  repo: Yusaku0923/PetGurashi
+  branch: main
+
+# Tells the admin to talk to a local proxy instead of GitHub.
+# Run `PORT=8082 ALLOWED_HOSTS=http://localhost:3001 npx decap-server` in
+# /Users/yusaku/projects/PetGurashi (default 8081 is taken by Docker Desktop).
+local_backend:
+  url: http://localhost:8082/api/v1
+  allowed_hosts:
+    - http://localhost:3001
+
+media_folder: public/images/articles
+public_folder: /images/articles
+
+# Reusable field set matching content.config.ts (zod) bounds.
+# title: 10-40 / description: 40-140
+# Repeated per collection because Decap config does not support YAML anchors
+# inside collection definitions reliably across all CMS forks.
+
+collections:
+  - name: dog_daily
+    label: 犬・毎日の暮らし
+    label_singular: 記事
+    folder: content/dog/daily
+    create: true
+    extension: md
+    format: frontmatter
+    slug: '{{slug}}'
+    summary: '{{title}}'
+    fields: &article_fields
+      - { name: title,       label: タイトル,       widget: string,   hint: '10-40 文字' }
+      - { name: description, label: 説明文,         widget: text,     hint: '40-140 文字' }
+      - { name: category,    label: カテゴリ,       widget: select,   options: [daily, outing, health, starter, furniture, compare, 100kin, column], default: daily }
+      - { name: pet,         label: 対象ペット,     widget: select,   options: [dog, cat, both], default: dog }
+      - { name: tags,        label: タグ,           widget: list,     default: [] }
+      - { name: date,        label: 更新日,         widget: datetime, date_format: 'YYYY-MM-DD', time_format: false, picker_utc: false }
+      - { name: created,     label: 作成日,         widget: datetime, date_format: 'YYYY-MM-DD', time_format: false, picker_utc: false }
+      - { name: listed,      label: 一覧表示,       widget: boolean,  default: true }
+      - { name: toc,         label: 目次表示,       widget: boolean,  default: true }
+      - { name: draft,       label: 下書き,         widget: boolean,  default: false }
+      - { name: pageType,    label: ページ種別,     widget: select,   options: [article, category], default: article }
+      - { name: heroImage,   label: ヒーロー画像,   widget: image,    required: false, choose_url: false }
+      - { name: body,        label: 本文,           widget: markdown }
+
+  - name: dog_starter
+    label: 犬・はじめて飼う
+    folder: content/dog/starter
+    create: true
+    extension: md
+    format: frontmatter
+    fields: *article_fields
+
+  - name: cat_daily
+    label: 猫・毎日の暮らし
+    folder: content/cat/daily
+    create: true
+    extension: md
+    format: frontmatter
+    fields: *article_fields
